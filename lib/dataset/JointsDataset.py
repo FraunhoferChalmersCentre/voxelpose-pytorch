@@ -11,6 +11,7 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 import os
+import re
 
 from utils.transforms import get_affine_transform
 from utils.transforms import affine_transform, get_scale
@@ -74,6 +75,7 @@ class JointsDataset(Dataset):
         db_rec = copy.deepcopy(self.db[idx])
 
         image_file = db_rec['image']
+        image_file = re.sub(r'_(\d{6,})\.jpg$', lambda m: f"_{int(m.group(1)):06d}.jpg", image_file)
 
         if self.data_format == 'zip':
             from utils import zipreader

@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 
 
 def train_3d(config, model, optimizer, loader, epoch, output_dir, writer_dict, device=torch.device('cuda'), dtype=torch.float):
+    torch.autograd.set_detect_anomaly(True)
+
     batch_time = AverageMeter()
     data_time = AverageMeter()
     losses = AverageMeter()
@@ -36,6 +38,7 @@ def train_3d(config, model, optimizer, loader, epoch, output_dir, writer_dict, d
     end = time.time()
     for i, (inputs, targets_2d, weights_2d, targets_3d, meta, input_heatmap) in enumerate(loader):
         data_time.update(time.time() - end)
+        print(i)
 
         if 'panoptic' in config.DATASET.TEST_DATASET:
             pred, heatmaps, grid_centers, loss_2d, loss_3d, loss_cord = model(views=inputs, meta=meta,
@@ -56,6 +59,11 @@ def train_3d(config, model, optimizer, loader, epoch, output_dir, writer_dict, d
         loss = loss_2d + loss_3d + loss_cord
         losses.update(loss.item())
 
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        """
         if loss_cord > 0:
             optimizer.zero_grad()
             (loss_2d + loss_cord).backward()
@@ -65,9 +73,11 @@ def train_3d(config, model, optimizer, loader, epoch, output_dir, writer_dict, d
             optimizer.zero_grad()
             accu_loss_3d.backward()
             optimizer.step()
-            accu_loss_3d = 0.0
+            accu_loss_3d = torch.tensor(0.0, device=loss_3d.device, requires_grad=True)
+
         else:
-            accu_loss_3d += loss_3d / accumulation_steps
+            accu_loss_3d = accu_loss_3d + (loss_3d / accumulation_steps)
+        """
 
         batch_time.update(time.time() - end)
         end = time.time()

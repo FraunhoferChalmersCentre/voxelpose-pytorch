@@ -90,11 +90,12 @@ class ProjectLayer(nn.Module):
                     sample_grid = torch.clamp(sample_grid.view(1, 1, nbins, 2), -1.1, 1.1)
 
                     # if pytorch version < 1.3.0, align_corners=True should be omitted.
-                    cubes[i:i + 1, :, :, :, c] += F.grid_sample(heatmaps[c][i:i + 1, :, :, :], sample_grid, align_corners=True)
+                    cubes[i:i + 1, :, :, :, c] = cubes[i:i + 1, :, :, :, c] + F.grid_sample(heatmaps[c][i:i + 1, :, :, :], sample_grid, align_corners=True)
 
         # cubes = cubes.mean(dim=-1)
-        cubes = torch.sum(torch.mul(cubes, bounding), dim=-1) / (torch.sum(bounding, dim=-1) + 1e-6)
-        cubes[cubes != cubes] = 0.0
+        cubes = torch.sum(cubes * bounding, dim=-1) / (torch.sum(bounding, dim=-1) + 1e-6)
+        mask = cubes != cubes
+        cubes = torch.where(mask, torch.zeros_like(cubes), cubes)
         cubes = cubes.clamp(0.0, 1.0)
 
         cubes = cubes.view(batch_size, num_joints, cube_size[0], cube_size[1], cube_size[2])  ##

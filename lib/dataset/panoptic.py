@@ -31,7 +31,8 @@ TRAIN_LIST = [
     '160906_ian3',
     '160906_band1',
     '160906_band2',
-    '160906_band3',
+    # '160906_band3', It has a corrupted file
+    '170221_haggling_b1'
 ]
 VAL_LIST = ['160906_pizza1', '160422_haggling1', '160906_ian5', '160906_band4']
 

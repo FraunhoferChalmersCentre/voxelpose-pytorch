@@ -14,7 +14,8 @@ import torch.backends.cudnn as cudnn
 import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
-from tensorboardX import SummaryWriter
+# from tensorboardX import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 import argparse
 import os
 import pprint
@@ -58,7 +59,27 @@ def get_optimizer(model):
     return model, optimizer
 
 
+def set_random_seed(seed):
+    """
+    Set the random seed for reproducibility across PyTorch, NumPy, and Python's random module.
+
+    Args:
+        seed (int): The seed value to set.
+    """
+    # Set the seed for PyTorch
+    torch.manual_seed(seed)
+
+    # Set the seed for PyTorch CUDA operations if a GPU is available
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # For multi-GPU setups
+
+
 def main():
+
+    seed = 42
+    set_random_seed(seed)
+
     args = parse_args()
     logger, final_output_dir, tb_log_dir = create_logger(
         config, args.cfg, 'train')
@@ -130,6 +151,7 @@ def main():
         print('Epoch: {}'.format(epoch))
 
         # lr_scheduler.step()
+
         train_3d(config, model, optimizer, train_loader, epoch, final_output_dir, writer_dict)
         precision = validate_3d(config, model, test_loader, final_output_dir)
 

@@ -13,7 +13,7 @@ class Basic3DBlock(nn.Module):
         self.block = nn.Sequential(
             nn.Conv3d(in_planes, out_planes, kernel_size=kernel_size, stride=1, padding=((kernel_size-1)//2)),
             nn.BatchNorm3d(out_planes),
-            nn.ReLU(True)
+            nn.ReLU()
         )
     
     def forward(self, x):
@@ -26,7 +26,7 @@ class Res3DBlock(nn.Module):
         self.res_branch = nn.Sequential(
             nn.Conv3d(in_planes, out_planes, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm3d(out_planes),
-            nn.ReLU(True),
+            nn.ReLU(),
             nn.Conv3d(out_planes, out_planes, kernel_size=3, stride=1, padding=1),
             nn.BatchNorm3d(out_planes)
         )
@@ -42,7 +42,7 @@ class Res3DBlock(nn.Module):
     def forward(self, x):
         res = self.res_branch(x)
         skip = self.skip_con(x)
-        return F.relu(res + skip, True)
+        return F.relu(res + skip)
 
     
 class Pool3DBlock(nn.Module):
@@ -62,7 +62,7 @@ class Upsample3DBlock(nn.Module):
         self.block = nn.Sequential(
             nn.ConvTranspose3d(in_planes, out_planes, kernel_size=kernel_size, stride=stride, padding=0, output_padding=0),
             nn.BatchNorm3d(out_planes),
-            nn.ReLU(True)
+            nn.ReLU()
         )
 
     def forward(self, x):
