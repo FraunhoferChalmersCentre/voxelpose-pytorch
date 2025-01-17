@@ -6,9 +6,9 @@
 import torch
 import torch.nn as nn
 
-from models.v2v_net import V2VNet
-from models.project_layer import ProjectLayer
-from core.proposal import nms
+from lib.models.v2v_net import V2VNet
+from lib.models.project_layer import ProjectLayer
+from lib.core.proposal import nms
 
 
 class ProposalLayer(nn.Module):

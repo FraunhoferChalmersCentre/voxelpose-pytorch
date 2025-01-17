@@ -10,9 +10,9 @@ import copy
 import torch
 import numpy as np
 
-from utils.vis import save_debug_images_multi
-from utils.vis import save_debug_3d_images
-from utils.vis import save_debug_3d_cubes
+from lib.utils.vis import save_debug_images_multi
+from lib.utils.vis import save_debug_3d_images
+from lib.utils.vis import save_debug_3d_cubes
 
 logger = logging.getLogger(__name__)
 

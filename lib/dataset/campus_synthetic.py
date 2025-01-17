@@ -21,10 +21,10 @@ import cv2
 
 import os
 
-from utils.transforms import get_affine_transform
-from utils.transforms import affine_transform
-from utils.transforms import rotate_points, get_scale
-from utils.cameras_cpu import project_pose
+from lib.utils.transforms import get_affine_transform
+from lib.utils.transforms import affine_transform
+from lib.utils.transforms import rotate_points, get_scale
+from lib.utils.cameras_cpu import project_pose
 
 logger = logging.getLogger(__name__)
 

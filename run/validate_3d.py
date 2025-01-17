@@ -22,14 +22,14 @@ import logging
 import json
 
 import _init_paths
-from core.config import config
-from core.config import update_config
-from core.function import train_3d, validate_3d
-from utils.utils import create_logger
-from utils.utils import save_checkpoint, load_checkpoint, load_model_state
-from utils.utils import load_backbone_panoptic
-import dataset
-import models
+from lib.core.config import config
+from lib.core.config import update_config
+from lib.core.function import train_3d, validate_3d
+from lib.utils.utils import create_logger
+from lib.utils.utils import save_checkpoint, load_checkpoint, load_model_state
+from lib.utils.utils import load_backbone_panoptic
+import lib.dataset as dataset
+import lib.models as models
 
 
 def parse_args():

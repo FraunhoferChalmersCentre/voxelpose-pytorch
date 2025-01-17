@@ -16,7 +16,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from core.config import get_model_name
+from lib.core.config import get_model_name
 
 
 def create_logger(cfg, cfg_name, phase='train'):

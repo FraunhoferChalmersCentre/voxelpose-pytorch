@@ -10,11 +10,11 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 
-from models import pose_resnet
-from models.cuboid_proposal_net import CuboidProposalNet
-from models.pose_regression_net import PoseRegressionNet
-from core.loss import PerJointMSELoss
-from core.loss import PerJointL1Loss
+from lib.models import pose_resnet
+from lib.models.cuboid_proposal_net import CuboidProposalNet
+from lib.models.pose_regression_net import PoseRegressionNet
+from lib.core.loss import PerJointMSELoss
+from lib.core.loss import PerJointL1Loss
 
 
 class MultiPersonPoseNet(nn.Module):

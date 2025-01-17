@@ -16,8 +16,8 @@ import logging
 import os
 import copy
 
-from dataset.JointsDataset import JointsDataset
-from utils.transforms import projectPoints
+from lib.dataset.JointsDataset import JointsDataset
+from lib.utils.transforms import projectPoints
 
 logger = logging.getLogger(__name__)
 

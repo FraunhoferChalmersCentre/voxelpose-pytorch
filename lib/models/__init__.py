@@ -7,10 +7,10 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import models.pose_resnet
-import models.v2v_net
-import models.project_layer
-import models.cuboid_proposal_net
-import models.pose_regression_net
-import models.multi_person_posenet
+import lib.models.pose_resnet
+import lib.models.v2v_net
+import lib.models.project_layer
+import lib.models.cuboid_proposal_net
+import lib.models.pose_regression_net
+import lib.models.multi_person_posenet
 

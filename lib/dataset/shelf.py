@@ -17,8 +17,8 @@ import copy
 import os
 from collections import OrderedDict
 
-from dataset.JointsDataset import JointsDataset
-from utils.cameras_cpu import project_pose
+from lib.dataset.JointsDataset import JointsDataset
+from lib.utils.cameras_cpu import project_pose
 
 SHELF_JOINTS_DEF = {
     'Right-Ankle': 0,

@@ -13,8 +13,8 @@ from torch.utils.data import Dataset
 import os
 import re
 
-from utils.transforms import get_affine_transform
-from utils.transforms import affine_transform, get_scale
+from lib.utils.transforms import get_affine_transform
+from lib.utils.transforms import affine_transform, get_scale
 
 logger = logging.getLogger(__name__)
 
