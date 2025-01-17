@@ -9,6 +9,7 @@ from __future__ import print_function
 
 import torch
 import torch.nn as nn
+from typing import List, Dict
 
 from lib.models import pose_resnet
 from lib.models.cuboid_proposal_net import CuboidProposalNet
@@ -31,7 +32,69 @@ class MultiPersonPoseNet(nn.Module):
         self.root_id = cfg.DATASET.ROOTIDX
         self.dataset_name = cfg.DATASET.TEST_DATASET
 
-    def forward(self, views=None, meta=None, targets_2d=None, weights_2d=None, targets_3d=None, input_heatmaps=None):
+    def forward(self,
+                views: List[torch.Tensor] = None,
+                meta: List[Dict] = None,
+                targets_2d: List[torch.Tensor] = None,
+                weights_2d: List[torch.Tensor] = None,
+                targets_3d: torch.Tensor = None,
+                input_heatmaps: List[torch.Tensor] = None):
+        """
+        Perform forward-pass for the network.
+
+        Args:
+            views (list[torch.Tensor]): A list of input image tensor of shape (B, C, H, W),
+                where B is the batch size, C is the number of channels in this case 3 RGB,
+                H is the height, and W is the width.
+                Each element in the list is from different cameras.
+            meta (list[dict]): Metadata associated with the inputs, containing information:
+                - 'image': Path to images in views.
+                - 'num_person': Number of people in each sample.
+                - 'roots_3d': 3D coordinates of root joints (used if USE_GT is True).
+                - 'joints_3d': 3D joint positions (for calculating pose loss).
+                - 'joints_3d_vis': Visibility masks for 3D joints.
+                - 'center: Center of the image for affine transformations, shape (2,).
+                    Typically set to the midpoint of the image dimensions (e.g., [960, 540] for a 1920x1080 image).
+                - 'scale': Scaling factor used to resize the image to the target input size of the network.
+                - 'rotation': Rotation angle (in degrees) applied to the image during augmentation or preprocessing.
+                - 'camera' (dict): Camera calibration parameters for projecting 3D points to the 2D image plane:
+                    - 'R': Rotation matrix.
+                    - 'T': Translation vector.
+                    - 'fx', 'fy': Focal lengths along the x and y axes, respectively.
+                    - 'cx', 'cy': Principal point offsets along the x and y axes, respectively.
+                    - 'k': Radial distortion coefficients.
+                    - 'p': Tangential distortion coefficient.
+            targets_2d (list[torch.Tensor]): Ground truth 2D heatmaps of shape (B, J, H', W'),
+                where J is the number of joints, H' and W' are heatmap dimensions.
+                Each element in the list is from different cameras.
+            weights_2d (list[torch.Tensor]): Weights for the 2D heatmaps, typically of shape (B, J, 1).
+                Each element in the list is from different cameras.
+            targets_3d (torch.Tensor): Ground truth 3D heatmaps of shape (B, D, H', W'),
+                where D is the depth dimension.
+            input_heatmaps (list[torch.Tensor]): Precomputed input heatmaps, used as an alternative
+                to views if provided.
+
+        Returns:
+            pred (torch.Tensor): Predicted joint locations and confidences of shape (B, N, J, 5),
+                where B is batch-size, N is the number of proposals (pre-defined maximum in config),
+                J is the number of joints, and the last dimension contains:
+                - [x, y, z] real coordinates [index: 0 to 2] (3 elements).
+                - Presence of joint: 0 = present, -1 = no present,
+                i.e., confidence score > threshold [index: 3] (1 element).
+                - Confidence score of joint [index: 4] (1 element).
+            all_heatmaps (list[torch.Tensor]): List of 2D heatmaps for each view.
+            grid_centers (torch.Tensor): Anchor locations and their associated information of shape (B, N, 5),
+                where B is batch-size, N is the number of proposals (pre-defined maximum in config),
+                and the last dimension contains:
+                - [x, y, z] real coordinates of anchor point [index: 0 to 2] (3 elements).
+                - Presence of person (root joint?): 0 = present, -1 = no present,
+                i.e., confidence score > threshold [index: 3] (1 element).
+                - Confidence score of person (root joint?) [index: 4] (1 element).
+            loss_2d (torch.Tensor): 2D heatmap loss, computed as mean squared error.
+            loss_3d (torch.Tensor): 3D heatmap loss, computed as mean squared error.
+            loss_cord (torch.Tensor): Joint coordinate regression loss, computed as L1 loss.
+        """
+
         if views is not None:
             all_heatmaps = []
             for view in views:
