@@ -194,23 +194,16 @@ def _update_dict(k, v):
         if 'STD' in v and v['STD']:
             v['STD'] = np.array(
                 [eval(x) if isinstance(x, str) else x for x in v['STD']])
-    if k == 'NETWORK':
-        if 'HEATMAP_SIZE' in v:
-            if isinstance(v['HEATMAP_SIZE'], int):
-                v['HEATMAP_SIZE'] = np.array(
-                    [v['HEATMAP_SIZE'], v['HEATMAP_SIZE']])
-            else:
-                v['HEATMAP_SIZE'] = np.array(v['HEATMAP_SIZE'])
-        if 'IMAGE_SIZE' in v:
-            if isinstance(v['IMAGE_SIZE'], int):
-                v['IMAGE_SIZE'] = np.array([v['IMAGE_SIZE'], v['IMAGE_SIZE']])
-            else:
-                v['IMAGE_SIZE'] = np.array(v['IMAGE_SIZE'])
+
+    if k not in config:
+        config[k] = edict()
+
     for vk, vv in v.items():
         if vk in config[k]:
             config[k][vk] = vv
         else:
-            raise ValueError("{}.{} not exist in config.py".format(k, vk))
+            config[k][vk] = vv
+            print(f"✅ Adding new key: {k}.{vk} = {vv}")
 
 
 def update_config(config_file):

@@ -8,6 +8,7 @@ from __future__ import division
 from __future__ import print_function
 
 from lib.dataset.panoptic import Panoptic as panoptic
+from lib.dataset.panoptic_pred import PanopticInference as panoptic_pred
 from lib.dataset.shelf_synthetic import ShelfSynthetic as shelf_synthetic
 from lib.dataset.campus_synthetic import CampusSynthetic as campus_synthetic
 from lib.dataset.shelf import Shelf as shelf
