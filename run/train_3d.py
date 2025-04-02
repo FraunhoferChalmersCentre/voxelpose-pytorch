@@ -29,6 +29,7 @@ from core.function import train_3d, validate_3d
 from utils.utils import create_logger
 from utils.utils import save_checkpoint, load_checkpoint, load_model_state
 from utils.utils import load_backbone_panoptic
+from lib.models import multi_person_posenet
 import dataset
 import models
 
@@ -124,8 +125,7 @@ def main():
     torch.backends.cudnn.enabled = config.CUDNN.ENABLED
 
     print('=> Constructing models ..')
-    model = eval('models.' + config.MODEL + '.get_multi_person_pose_net')(
-        config, is_train=True)
+    model = multi_person_posenet.get_multi_person_pose_net(config, is_train=True)
     with torch.no_grad():
         model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
 

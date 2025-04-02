@@ -75,24 +75,29 @@ LIMBS = [[0, 1],
 
 
 class Panoptic(JointsDataset):
-    def __init__(self, cfg, image_set, is_train, transform=None):
+    def __init__(self, cfg, image_set, is_train, transform=None, min_views=2, max_views=5):
         super().__init__(cfg, image_set, is_train, transform)
         self.pixel_std = 200.0
         self.joints_def = JOINTS_DEF
         self.limbs = LIMBS
         self.num_joints = len(JOINTS_DEF)
+        self.min_views = min_views
+        self.max_views = min(max_views, cfg.DATASET.CAMERA_NUM)
 
         if self.image_set == 'train':
             self.sequence_list = TRAIN_LIST
             self._interval = 3
-            self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3)][:self.num_views]
+            self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3), (0, 9), (0, 14), (0, 15), (0, 24), (0, 25), (0, 26)][:self.num_views]
+            # self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3)][:self.num_views]
             # self.cam_list = list(set([(0, n) for n in range(0, 31)]) - {(0, 12), (0, 6), (0, 23), (0, 13), (0, 3)})
             # self.cam_list.sort()
             self.num_views = len(self.cam_list)
         elif self.image_set == 'validation':
             self.sequence_list = VAL_LIST
             self._interval = 12
-            self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3)][:self.num_views]
+            self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3), (0, 9), (0, 14), (0, 15), (0, 24), (0, 25),
+                             (0, 26)][:self.num_views]
+            # self.cam_list = [(0, 12), (0, 6), (0, 23), (0, 13), (0, 3)][:self.num_views]
             self.num_views = len(self.cam_list)
 
         self.db_file = 'group_{}_cam{}.pkl'.format(self.image_set, self.num_views)
@@ -225,13 +230,13 @@ class Panoptic(JointsDataset):
     def __getitem__(self, idx):
         input, target, weight, target_3d, meta, input_heatmap = [], [], [], [], [], []
 
-        # if self.image_set == 'train':
-        #     # camera_num = np.random.choice([5], size=1)
-        #     select_cam = np.random.choice(self.num_views, size=5, replace=False)
-        # elif self.image_set == 'validation':
-        #     select_cam = list(range(self.num_views))
+        if self.image_set == 'train':
+            num_sampled_views = np.random.randint(self.min_views, self.max_views + 1)
+            select_cam = np.random.choice(self.num_views, size=num_sampled_views, replace=False)
+        else:
+            select_cam = [8, 9] # list(range(self.max_views))
 
-        for k in range(self.num_views):
+        for k in select_cam:
             i, t, w, t3, m, ih = super().__getitem__(self.num_views * idx + k)
             if i is None:
                 continue

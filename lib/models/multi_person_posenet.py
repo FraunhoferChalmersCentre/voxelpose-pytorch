@@ -16,7 +16,7 @@ from lib.models.cuboid_proposal_net import CuboidProposalNet
 from lib.models.pose_regression_net import PoseRegressionNet
 from lib.core.loss import PerJointMSELoss
 from lib.core.loss import PerJointL1Loss
-
+from lib.utils.heatmaps import visualize_heatmaps
 
 class MultiPersonPoseNet(nn.Module):
     def __init__(self, backbone, cfg):
@@ -102,6 +102,8 @@ class MultiPersonPoseNet(nn.Module):
                 all_heatmaps.append(heatmaps)
         else:
             all_heatmaps = input_heatmaps
+
+        # visualize_heatmaps(views, all_heatmaps,'/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/heatmapsdebug', meta=meta, heatmapsize=False) # TODO
 
         # all_heatmaps = targets_2d
         device = all_heatmaps[0].device

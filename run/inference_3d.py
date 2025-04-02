@@ -81,7 +81,7 @@ def main():
         test_dataset,
         batch_size=config.TEST.BATCH_SIZE * len(gpus),
         shuffle=False,
-        num_workers=config.WORKERS,
+        num_workers=0,#config.WORKERS,
         pin_memory=True
     )
 

@@ -20,7 +20,7 @@ DATASET:
   FLIP: False
   ROOT: 'data' # 'data/panoptic/'
   FOLDERS:
-    - '2025_02_11_voxelpose'
+    - '2025-03-31_voxelpose'
   ROT_FACTOR: 45
   SCALE_FACTOR: 0.35
   TEST_SUBSET: 'validation'

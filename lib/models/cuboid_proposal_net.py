@@ -9,6 +9,7 @@ import torch.nn as nn
 from lib.models.v2v_net import V2VNet
 from lib.models.project_layer import ProjectLayer
 from lib.core.proposal import nms
+from lib.utils.heatmaps import save_interactive_3d_heatmaps_world, save_interactive_3d_heatmap_world
 
 
 class ProposalLayer(nn.Module):
@@ -101,8 +102,29 @@ class CuboidProposalNet(nn.Module):
 
         initial_cubes, grids = self.project_layer(all_heatmaps, meta,
                                                   self.grid_size, [self.grid_center], self.cube_size)
+
+        # TODO
+        """
+        save_interactive_3d_heatmaps_world(heatmap_3d=initial_cubes[0],
+                                          space_size=self.grid_size,
+                                          space_center=self.grid_center,
+                                          output_dir='/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html',
+                                          meta=meta)
+        save_interactive_3d_heatmap_world(initial_cubes.sum(dim=1)[0],
+                                          self.grid_size,
+                                          self.grid_center,
+                                          '/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html/scatter_3d_heatmapSUM.html',
+                                          meta)
+        """
         root_cubes = self.v2v_net(initial_cubes)
         root_cubes = root_cubes.squeeze(1)
+        """
+        save_interactive_3d_heatmap_world(root_cubes[0],
+                                          self.grid_size,
+                                          self.grid_center,
+                                          '/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html/scatter_3d_heatmapROOT.html',
+                                          meta)
+        """
         grid_centers = self.proposal_layer(root_cubes, meta)
 
         return root_cubes, grid_centers
