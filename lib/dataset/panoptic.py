@@ -234,7 +234,7 @@ class Panoptic(JointsDataset):
             num_sampled_views = np.random.randint(self.min_views, self.max_views + 1)
             select_cam = np.random.choice(self.num_views, size=num_sampled_views, replace=False)
         else:
-            select_cam = [8, 9] # list(range(self.max_views))
+            select_cam = [0,1,2,3,4]# [8, 9] # list(range(self.max_views))
 
         for k in select_cam:
             i, t, w, t3, m, ih = super().__getitem__(self.num_views * idx + k)

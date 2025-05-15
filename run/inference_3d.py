@@ -7,8 +7,11 @@ import numpy as np
 
 from lib.core.config import config, update_config
 from lib.utils.utils import create_logger
+from lib.dataset import get_dataset
+from lib.models.multi_person_posenet import get_multi_person_pose_net
 import lib.dataset as dataset
 import lib.models as models
+from lib.utils.heatmaps import save_interactive_3d_skeleton_with_slider
 
 
 def parse_args():
@@ -17,7 +20,6 @@ def parse_args():
     """
     parser = argparse.ArgumentParser(description="Run inference on a dataset")
     parser.add_argument('--cfg', help='Experiment configuration file', required=True, type=str)
-    # parser.add_argument('--model-file', help='Path to trained model file', required=True, type=str)
     parser.add_argument('--output-dir', help='Directory to save inference results', required=True, type=str)
 
     args, rest = parser.parse_known_args()
@@ -33,22 +35,15 @@ def run_inference(config, model, dataloader, output_dir):
     os.makedirs(output_dir, exist_ok=True)  # Create output directory if it does not exist
 
     preds = []
+    metas = []
     with torch.no_grad():  # Disable gradient computation for inference
         for i, (inputs, meta) in enumerate(dataloader):
             pred, heatmaps, grid_centers, _, _, _ = model(views=inputs, meta=meta)
-
-            pred = pred.detach().cpu().numpy()  # Convert predictions to NumPy array
-            for b in range(pred.shape[0]):
-                preds.append(pred[b])
-
-            # Save predictions as JSON files
-            output_file = os.path.join(output_dir, f"pred_{i:06d}.json")
-            with open(output_file, 'w') as f:
-                json.dump(pred[b].tolist(), f)
-
-            # Print progress
-            if i % config.PRINT_FREQ == 0 or i == len(dataloader) - 1:
-                print(f"Inference [{i}/{len(dataloader)}] completed.")
+            pred = pred.detach().cpu()
+            metas.append(meta)
+            preds.append(pred)
+    preds = torch.cat(preds, dim=0)
+    save_interactive_3d_skeleton_with_slider(preds, output_path="/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html/my_skeletons.html", meta=meta)
 
     print(f"✅ Inference completed. Results saved to {output_dir}")
 
@@ -72,7 +67,7 @@ def main():
     # Load dataset
     print("=> Loading dataset ..")
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-    test_dataset = eval(f'dataset.{config.DATASET.TEST_DATASET}')(
+    test_dataset = get_dataset(config.DATASET.TEST_DATASET)(
         config, None, False,
         transforms.Compose([transforms.ToTensor(), normalize])
     )
@@ -87,8 +82,7 @@ def main():
 
     # Load the trained model
     print('=> Loading models ..')
-    model = eval('models.' + config.MODEL + '.get_multi_person_pose_net')(
-        config, is_train=True)
+    model = get_multi_person_pose_net(config, is_train=True)
     with torch.no_grad():
         model = torch.nn.DataParallel(model, device_ids=gpus).cuda()
 
