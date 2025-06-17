@@ -43,7 +43,7 @@ def run_inference(config, model, dataloader, output_dir):
             metas.append(meta)
             preds.append(pred)
     preds = torch.cat(preds, dim=0)
-    save_interactive_3d_skeleton_with_slider(preds, output_path="/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html/my_skeletons.html", meta=meta)
+    save_interactive_3d_skeleton_with_slider(preds, output_path=os.path.join(output_dir, "my_skeletons.html"), meta=meta)
 
     print(f"✅ Inference completed. Results saved to {output_dir}")
 

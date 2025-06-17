@@ -1,6 +1,7 @@
 import os
 import cv2
 import numpy as np
+import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -449,6 +450,9 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
         output_path (str): Output path to HTML file.
         meta (list, optional): List of metadata dicts for visualizing camera positions.
     """
+    # Read triangulated points
+    df_triangulated_pts = pd.read_excel(r"C:\Users\ViktorSkantze\OneDrive - Fraunhofer-Chalmers Centre\Python\projects\Pose estimation\results\inference\all_joints.xlsx")
+    triangulated_pts = df_triangulated_pts.loc[df_triangulated_pts['view_idx'] == '0',['image', 'X3d', 'Y3d', 'Z3d']]
     if isinstance(pred, torch.Tensor):
         pred = pred.detach().cpu().numpy()
 
@@ -497,6 +501,38 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
                     frame_traces.append(limb_trace)
 
         frame_list.append(frame_traces)
+
+        # ---- Add triangulated skeleton ----
+        tri_skeleton = triangulated_pts[b]  # shape (J, 3)
+        x_tri, y_tri, z_tri = tri_skeleton[:, 0], tri_skeleton[:, 1], tri_skeleton[:, 2]
+        present_tri = np.ones(len(x_tri), dtype=bool)  # or your own mask if some joints are missing
+
+        # Joints for triangulated skeleton
+        joint_trace_tri = go.Scatter3d(
+            x=x_tri[present_tri], y=y_tri[present_tri], z=z_tri[present_tri],
+            mode='markers+text',
+            text=[str(i) for i in range(len(x_tri))],
+            marker=dict(size=4, color='red'),
+            name='Triangulated',
+            showlegend=True,
+            visible=(b == 0)
+        )
+        fig.add_trace(joint_trace_tri)
+        frame_traces.append(joint_trace_tri)
+
+        # Limbs for triangulated skeleton
+        for i, j in limbs:
+            if present_tri[i] and present_tri[j]:
+                limb_trace_tri = go.Scatter3d(
+                    x=[x_tri[i], x_tri[j]], y=[y_tri[i], y_tri[j]], z=[z_tri[i], z_tri[j]],
+                    mode='lines',
+                    line=dict(width=3, color='red'),
+                    name='Triangulated',
+                    showlegend=False,
+                    visible=(b == 0)
+                )
+                fig.add_trace(limb_trace_tri)
+                frame_traces.append(limb_trace_tri)
 
     # Add camera positions and directions if available
     if meta:
