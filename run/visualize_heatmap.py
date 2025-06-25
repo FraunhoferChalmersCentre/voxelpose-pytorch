@@ -2,37 +2,19 @@ import torch
 import torchvision.transforms as transforms
 import argparse
 import os
-import json
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('TkAgg')
 import pandas as pd
+from collections import defaultdict
 
 from lib.core.config import config, update_config
 from lib.utils.utils import create_logger
 import lib.dataset as dataset
 import lib.models as models
-
-
-JOINTS_DEF = {
-    'neck': 0,
-    'nose': 1,
-    'mid-hip': 2,
-    'l-shoulder': 3,
-    'l-elbow': 4,
-    'l-wrist': 5,
-    'l-hip': 6,
-    'l-knee': 7,
-    'l-ankle': 8,
-    'r-shoulder': 9,
-    'r-elbow': 10,
-    'r-wrist': 11,
-    'r-hip': 12,
-    'r-knee': 13,
-    'r-ankle': 14,
-}
+from lib.utils.definitions import *
 
 
 def parse_args():
@@ -59,6 +41,7 @@ def overlay_heatmap(image, heatmap):
     overlay = cv2.addWeighted(image, 0.6, heatmap, 0.4, 0)  # Blend images
     return overlay
 
+
 def get_center(heatmap):
 
     if heatmap.max()<0.5:
@@ -68,7 +51,55 @@ def get_center(heatmap):
     max_locs = np.argwhere(heatmap == max_val)
     center = max_locs.mean(axis=0)  # [y, x] as floats
 
-    return center
+    return center[::-1]
+
+
+def plot_3d_joints(points_3d, joint_names=None, limbs=None, title="3D pose", elev=15, azim=-70):
+    """
+    Plots 3D joints with optional joint names and skeleton limbs.
+
+    :param points_3d: np.array of shape (N, 3) or (3, N)
+    :param joint_names: dict mapping index -> name
+    :param limbs: list of pairs [(i1, i2), ...] defining bones
+    :param title: plot title
+    :param elev: elevation angle for 3D view
+    :param azim: azimuth angle for 3D view
+    """
+
+    if joint_names is None:
+        joint_names = JOINTS_DEF_INV
+
+    if limbs is None:
+        limbs = LIMBS
+
+    if points_3d.shape[0] == 3 and points_3d.shape[1] != 3:
+        points_3d = points_3d.T
+
+    xs, ys, zs = points_3d[:, 0], points_3d[:, 1], points_3d[:, 2]
+
+    fig = plt.figure()
+    ax = fig.add_subplot(111, projection='3d')
+    ax.scatter(xs, ys, zs, c='b', marker='o')
+
+    for i in range(points_3d.shape[0]):
+        name = joint_names.get(i, str(i))
+        ax.text(xs[i], ys[i], zs[i], name, size=8)
+
+    if limbs:
+        for i1, i2 in limbs:
+            xline = [xs[i1], xs[i2]]
+            yline = [ys[i1], ys[i2]]
+            zline = [zs[i1], zs[i2]]
+            ax.plot(xline, yline, zline, 'r')
+
+    ax.set_xlabel('X (right)')
+    ax.set_ylabel('Y (forward)')
+    ax.set_zlabel('Z (up)')
+    ax.set_title(title)
+    ax.view_init(elev=elev, azim=azim)
+    plt.tight_layout()
+    plt.show()
+
 
 def triangulate_pts(K1, K2, R, T, joint_data):
 
@@ -76,9 +107,11 @@ def triangulate_pts(K1, K2, R, T, joint_data):
     df_joint_pts = pd.DataFrame(joint_data)
     df_joints_sorted = df_joint_pts.sort_values(['image', 'joint_idx', 'view_idx'], ascending=[True, True, True])
 
-    # Convert coordinate system to opencv
-    M = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
-    R =  R @ np.linalg.inv(M)
+    R_classic = np.array(R)
+    T_classic = np.array(T)
+
+    R = R_classic @ M.T
+    T = - M.T @ R_classic.T @ T_classic
 
     # Get projection matrices to project image points to real world coordinates
     P1 = K1 @ np.hstack((np.eye(3), np.zeros((3, 1)))) # For Camera 0 (reference)
@@ -100,25 +133,125 @@ def triangulate_pts(K1, K2, R, T, joint_data):
     xy_0 = xy_0.astype(np.float64).T  # shape (2, N)
     xy_1 = xy_1.astype(np.float64).T  # shape (2, N)
 
-    #for image in iterrows(df_pts):
     # Triangulate to homogeneous coordinates
     points_4d = cv2.triangulatePoints(P1, P2, xy_0, xy_1)
 
     # Convert to 3D (non-homogeneous coordinates)
     points_3d = points_4d[:3, :] / points_4d[3, :]  # Shape (3, N)
 
-    # from mpl_toolkits.mplot3d import Axes3D  # Not strictly needed in recent matplotlib, but safe to import
-    # # If points_3d is shape (N, 3), transpose for plotting, or use .T if shape (3, N)
-    # fig = plt.figure()
-    # ax = fig.add_subplot(111, projection='3d')
-    #
-    # # If your points are shape (N, 3):
-    # ax.scatter(points_3d[0, :], points_3d[1,:], points_3d[ 2,:], marker='.')
-    # ax.set_xlabel('X')
-    # ax.set_ylabel('Y')
-    # ax.set_zlabel('Z')
-    # plt.show()
-    return points_3d
+    points_classic = points_3d.T @ M
+
+    plot_3d_joints(points_classic)
+    return points_classic
+
+
+def triangulate_pts_adaptive(joint_data, metas, img_idx=0):
+    """
+    Triangulate 3-D joint locations from multi-view 2-D detections.
+
+    Args
+    ----
+    joint_data : list(dict)
+        Each dict has keys ['x', 'y', 'joint_idx', 'view_idx', 'image'].
+    metas : list(dict)
+        Per-view metadata; metas[v]['camera'] must contain 'K', 'R', 'T'.
+    img_idx : int
+        Which image slice to take intrinsics / extrinsics from.
+
+    Returns
+    -------
+    np.ndarray
+        (num_joints, 3) array of 3-D points in classical Z-up coords.
+        Missing / untriangulated joints are NaN.
+    """
+    # 1) pandas pivot: rows = (image, joint_idx)  cols = (coord, view_idx)
+    df = pd.DataFrame(joint_data)
+    df_pivot = df.pivot_table(index=['image', 'joint_idx'],
+                              columns='view_idx',
+                              values=['x', 'y'])
+
+    num_joints  = df['joint_idx'].nunique()
+    view_indices = df['view_idx'].unique()
+    # Choose the smallest view index as reference
+    ref_view_idx = view_indices.min()
+
+    # 2) Pre-compute projection matrices for every camera
+    proj_mats = {}
+    R_ref_classic = np.array(metas[ref_view_idx]['camera']['R'][img_idx])
+    t_ref_classic = np.array(metas[ref_view_idx]['camera']['T'][img_idx]).reshape(3, 1)
+
+    R_ref_cv = R_ref_classic @ M.T  # classic  → OpenCV
+    t_ref_cv = -M.T @ R_ref_classic.T @ t_ref_classic
+
+    for v_idx in view_indices:
+        # --- Intrinsics ----------------------------------------------------------
+        K = np.array(metas[v_idx]['camera']['K'][img_idx])
+
+        # --- Extrinsics in classic camera coords ---------------------------------
+        R_classic = np.array(metas[v_idx]['camera']['R'][img_idx])
+        t_classic = np.array(metas[v_idx]['camera']['T'][img_idx]).reshape(3, 1)
+
+        # --- Convert to OpenCV axis convention -----------------------------------
+        R_cv = R_classic @ M.T
+        t_cv = -M.T @ R_classic.T @ t_classic
+
+        # --- Relative pose w.r.t. reference camera in OpenCV coords --------------
+        if v_idx == ref_view_idx:
+            R_rel = np.eye(3)
+            t_rel = np.zeros((3, 1))
+        else:
+            R_rel = R_cv @ R_ref_cv.T
+            t_rel = t_cv - R_rel @ t_ref_cv
+
+        # --- Final 3×4 projection matrix -----------------------------------------
+        proj_mats[v_idx] = K @ np.hstack((R_rel, t_rel))
+
+    # 3) Triangulate joint-by-joint
+    joint_results = np.full((num_joints, 3), np.nan)
+
+    for (_, j_idx), row in df_pivot.iterrows():
+        # --- collect all valid (x,y,P) for this joint ----------------------
+        pts2d, Ps = [], []
+        for v_idx in view_indices:
+            if not pd.isna(row.get(('x', v_idx), np.nan)):
+                x = row[('x', v_idx)]
+                y = row[('y', v_idx)]
+                pts2d.append([x, y])
+                Ps.append(proj_mats[v_idx])
+
+        m = len(Ps)           # how many views for this joint?
+        if m < 2:
+            # < 2 views → cannot triangulate
+            continue
+
+        pts2d = np.asarray(pts2d, dtype=np.float64)
+
+        # --- exactly two views --------------------------------------------
+        if m == 2:
+            P1, P2 = Ps
+            pt1 = pts2d[0].reshape(2, 1)
+            pt2 = pts2d[1].reshape(2, 1)
+
+            X_h = cv2.triangulatePoints(P1, P2, pt1, pt2)   # (4,1)
+            X   = (X_h[:3] / X_h[3]).ravel()
+
+        # --- three or more views ------------------------------------------
+        else:
+            A_rows = []
+            for (x, y), P in zip(pts2d, Ps):
+                A_rows.append(x * P[2] - P[0])
+                A_rows.append(y * P[2] - P[1])
+            A = np.vstack(A_rows)                           # (2m, 4)
+            _, _, Vt = np.linalg.svd(A)
+            X_h = Vt[-1]
+            X   = X_h[:3] / X_h[3]
+
+        # Classical Z-up coordinates
+        joint_results[j_idx] = X @ M
+
+    return joint_results
+
+
 
 def visualize_heatmaps(model, dataloader, output_dir):
     """
@@ -127,13 +260,6 @@ def visualize_heatmaps(model, dataloader, output_dir):
     """
     model.eval()
     os.makedirs(output_dir, exist_ok=True)
-
-    # Joint index mapping for easy lookup
-    JOINTS_DEF = {
-        0: 'neck', 1: 'nose', 2: 'mid-hip', 3: 'l-shoulder', 4: 'l-elbow',
-        5: 'l-wrist', 6: 'l-hip', 7: 'l-knee', 8: 'l-ankle', 9: 'r-shoulder',
-        10: 'r-elbow', 11: 'r-wrist', 12: 'r-hip', 13: 'r-knee', 14: 'r-ankle'
-    }
 
     image_counter = 0  # Counter for numbering images uniquely
 
@@ -150,7 +276,6 @@ def visualize_heatmaps(model, dataloader, output_dir):
 
             batch_size = heatmaps.shape[0]
             num_joints = heatmaps.shape[1]
-
 
             for img_idx in range(batch_size):
                 image_folder = os.path.join(output_dir, f"images/image_{image_counter:04d}")
@@ -169,8 +294,6 @@ def visualize_heatmaps(model, dataloader, output_dir):
                         heatmap = heatmaps[img_idx, joint_idx, :, :]
                         heatmap = cv2.resize(heatmap, (original_img.shape[1], original_img.shape[0]))
 
-
-
                         # Get heatmap center
                         joint_pts = get_center(heatmap)
                         joints_data.append({'x':joint_pts[0],
@@ -187,38 +310,31 @@ def visualize_heatmaps(model, dataloader, output_dir):
                         overlayed_img = overlay_heatmap(original_img, heatmap)
 
                         # Get joint name
-                        joint_name = JOINTS_DEF.get(joint_idx, f"joint_{joint_idx}")
+                        joint_name = JOINTS_DEF_INV.get(joint_idx, f"joint_{joint_idx}")
 
                         # Save image
                         output_file = os.path.join(view_folder, f"{joint_name}.jpg")
                         #plt.imsave(output_file, overlayed_img)
 
                 # Triangulate heatmap joints
-                try:
-                    triangulated_pts = triangulate_pts(K1=metas[0]['camera']['K'][img_idx],
-                                                             K2=metas[1]['camera']['K'][img_idx],
-                                                             R=metas[0]['camera']['R'][img_idx],
-                                                             T=metas[0]['camera']['T'][img_idx],
-                                                             joint_data=joints_data)
+                triangulated_pts = triangulate_pts_adaptive(joint_data=joints_data, metas=metas)
 
-                    for batch_idx, joint_dict in enumerate(joints_data):
-                        current_joint = joint_dict['joint_idx']
-                        xyz = triangulated_pts[:,current_joint]
-                        row = {
-                            'image': joint_dict['image'],
-                            'joint_idx': joint_dict['joint_idx'],
-                            'view_idx': joint_dict['view_idx'],
-                            'img_path': joint_dict['img_path'],
-                            'x_2d': joint_dict['x'],
-                            'y_2d': joint_dict['y'],
-                            'X_3d': xyz[0],
-                            'Y_3d': xyz[1],
-                            'Z_3d': xyz[2],
-                        }
-                        all_joint_rows.append(row)
+                for batch_idx, joint_dict in enumerate(joints_data):
+                    current_joint = joint_dict['joint_idx']
+                    xyz = triangulated_pts[:,current_joint]
+                    row = {
+                        'image': joint_dict['image'],
+                        'joint_idx': joint_dict['joint_idx'],
+                        'view_idx': joint_dict['view_idx'],
+                        'img_path': joint_dict['img_path'],
+                        'x_2d': joint_dict['x'],
+                        'y_2d': joint_dict['y'],
+                        'X_3d': xyz[0],
+                        'Y_3d': xyz[1],
+                        'Z_3d': xyz[2],
+                    }
+                    all_joint_rows.append(row)
 
-                except Exception as e:
-                    print(f"Views length: {len(views)}")
 
                 print(f"✅ Saved heatmaps for image {image_counter}, from {len(views)} views")
 
@@ -227,7 +343,6 @@ def visualize_heatmaps(model, dataloader, output_dir):
     print(f"✅ Heatmap visualization completed. Results saved to {output_dir}")
     df_all_joints = pd.DataFrame(all_joint_rows)
     df_all_joints.to_excel(os.path.join(output_dir, "all_joints.xlsx"))
-
 
 
 
