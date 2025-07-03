@@ -1,12 +1,20 @@
 # %%
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.widgets import Slider
 from mpl_toolkits.mplot3d import Axes3D
-filename = r"C:\Users\ViktorSkantze\OneDrive - Fraunhofer-Chalmers Centre\Python\projects\Pose estimation\results\inference\all_joints.xlsx"
 
-df = pd.read_excel(filename)
+import argparse
+
+# --- Argument Parsing ---
+parser = argparse.ArgumentParser(description="Explore triangulated 3D points from an Excel file.")
+parser.add_argument('--file', type=str, required=True, help='Path to the all_joints.xlsx file.')
+args = parser.parse_args()
+
+# Load data from the provided file
+df = pd.read_excel(args.file)
 # %%
 JOINTS_DEF = {
     0: 'neck', 1: 'nose', 2: 'mid-hip', 3: 'l-shoulder', 4: 'l-elbow',
@@ -38,8 +46,8 @@ for image_idx, image_df in df.groupby('image'):
 
     # Rotate
     x_new = x
-    y_new = -z
-    z_new = y
+    y_new = y
+    z_new = z
 
     valid_mask = ~(np.isnan(x_new) | np.isnan(y_new) | np.isnan(z_new))
     if np.sum(valid_mask) == 0:
@@ -68,7 +76,7 @@ for joint_start, joint_end in SKELETON_BONES:
                          [z[joint_start], z[joint_end]], c='k', linewidth=2)
             lines.append(l)
 ax.set(xlabel='X', ylabel='Y', zlabel='Z', title=f'3D Joints: Image {image_indices[0]}')
-ax.view_init(elev=0, azim=-90)
+#ax.view_init(elev=0, azim=-90)
 
 # Slider setup
 ax_slider = plt.axes([0.1, 0.05, 0.8, 0.05])
@@ -96,3 +104,5 @@ def update(val):
 
 slider.on_changed(update)
 plt.show()
+
+# %%

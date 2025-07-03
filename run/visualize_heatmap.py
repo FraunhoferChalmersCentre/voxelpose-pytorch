@@ -321,7 +321,7 @@ def visualize_heatmaps(model, dataloader, output_dir):
 
                 for batch_idx, joint_dict in enumerate(joints_data):
                     current_joint = joint_dict['joint_idx']
-                    xyz = triangulated_pts[:,current_joint]
+                    xyz = triangulated_pts[current_joint,:]
                     row = {
                         'image': joint_dict['image'],
                         'joint_idx': joint_dict['joint_idx'],
