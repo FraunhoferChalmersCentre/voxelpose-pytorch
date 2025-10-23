@@ -12,6 +12,7 @@ from lib.models.multi_person_posenet import get_multi_person_pose_net
 import lib.dataset as dataset
 import lib.models as models
 from lib.utils.heatmaps import save_interactive_3d_skeleton_with_slider
+from lib.utils.triangulate_3d import triangulate_from_heatmaps
 
 
 def parse_args():
@@ -36,15 +37,42 @@ def run_inference(config, model, dataloader, output_dir):
 
     preds = []
     metas = []
-    with torch.no_grad():  # Disable gradient computation for inference
-        for i, (inputs, meta) in enumerate(dataloader):
-            pred, heatmaps, grid_centers, _, _, _ = model(views=inputs, meta=meta)
+    all_heatmaps = []
+    with torch.no_grad():
+
+            
+        for i, (views, meta) in enumerate(dataloader):
+            pred, heatmaps, grid_centers, _, _, _ = model(views=views, meta=meta)
             pred = pred.detach().cpu()
+
+            heatmaps_np = [hm.detach().cpu().numpy() for hm in heatmaps]
+            all_heatmaps.append(heatmaps_np)
+
             metas.append(meta)
             preds.append(pred)
+            
+    
+    # Triangulate joints from heatmaps
+    triangulated = triangulate_from_heatmaps(all_heatmaps, metas)
     preds = torch.cat(preds, dim=0)
-    save_interactive_3d_skeleton_with_slider(preds, output_path=os.path.join(output_dir, "my_skeletons.html"), meta=meta)
+    #triangulated_joints = np.concatenate(triangulated, axis=0)
 
+    # Save both model predictions and triangulated results
+    # For model predictions (shape: B, N, J, 5)
+    save_interactive_3d_skeleton_with_slider(
+        preds, 
+        output_path=os.path.join(output_dir, "model_predictions.html"),
+        meta=meta, 
+        is_triangulated=False
+    )
+
+    # For triangulated points (shape: B, J, 3)
+    save_interactive_3d_skeleton_with_slider(
+        triangulated, 
+        output_path=os.path.join(output_dir, "triangulated_joints.html"),
+        meta=meta,
+        is_triangulated=True
+    )
     print(f"✅ Inference completed. Results saved to {output_dir}")
 
 

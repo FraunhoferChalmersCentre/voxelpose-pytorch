@@ -300,7 +300,7 @@ def visualize_heatmaps(model, dataloader, output_dir):
                                             'y':joint_pts[1],
                                             'joint_idx':joint_idx,
                                             'view_idx':view_idx,
-                                            'image':f"{image_counter:04d}",
+                                            'image':img_idx,
                                             'img_path':original_img_path})
 
                         # Normalize heatmaps for overlay
