@@ -1,3 +1,30 @@
+"""
+Heatmap Visualization Script for VoxelPose
+
+This script runs inference on a multi-view pose estimation model and visualizes
+the predicted heatmaps overlaid on input images. It supports batch processing,
+multi-GPU inference, and saves results in a structured directory format. The script
+also triangulates 2D joint detections to 3D coordinates and exports joint data.
+
+Features:
+- Loads experiment configuration and trained model
+- Runs inference on a test dataset using multiple GPUs
+- Overlays predicted heatmaps on original images for each joint and view
+- Triangulates multi-view 2D joint detections to 3D coordinates
+- Saves visualizations and joint data to output directory
+- Exports all joint results to Excel for further analysis
+
+Example Usage:
+    python external/voxelpose/run/visualize_heatmap.py \
+        --cfg configs/panoptic/resnet50/inference_prn64_cpn80x80x20_960x512_cam5.yaml \
+        --output-dir output/heatmaps
+
+Requirements:
+- Trained VoxelPose model and configuration file
+- Test dataset prepared in the expected format
+- CUDA-enabled GPUs for inference
+
+"""
 import torch
 import torchvision.transforms as transforms
 import argparse
@@ -32,10 +59,15 @@ def parse_args():
 
 def overlay_heatmap(image, heatmap):
     """
-    Overlay a heatmap onto an image.
-    :param image: Original image (numpy array).
-    :param heatmap: Heatmap (numpy array, same size as image).
-    :return: Image with heatmap overlay.
+    Overlay a heatmap onto an image for visualization.
+
+    Args:
+        image (np.ndarray): The original image (H x W x 3).
+        heatmap (np.ndarray): The heatmap to overlay (H x W).
+        alpha (float): Transparency factor for the heatmap overlay.
+
+    Returns:
+        np.ndarray: Image with heatmap overlay.
     """
     heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)  # Convert grayscale heatmap to color
     overlay = cv2.addWeighted(image, 0.6, heatmap, 0.4, 0)  # Blend images
@@ -43,7 +75,15 @@ def overlay_heatmap(image, heatmap):
 
 
 def get_center(heatmap):
+    """
+    Find the coordinates of the maximum value in a heatmap.
 
+    Args:
+        heatmap (np.ndarray): The heatmap array.
+
+    Returns:
+        tuple: (x, y) coordinates of the maximum value.
+    """
     if heatmap.max()<0.5:
         return np.array([np.nan,np.nan])
     # Find maximum value coordinates
@@ -101,48 +141,6 @@ def plot_3d_joints(points_3d, joint_names=None, limbs=None, title="3D pose", ele
     plt.show()
 
 
-def triangulate_pts(K1, K2, R, T, joint_data):
-
-    # Filter data
-    df_joint_pts = pd.DataFrame(joint_data)
-    df_joints_sorted = df_joint_pts.sort_values(['image', 'joint_idx', 'view_idx'], ascending=[True, True, True])
-
-    R_classic = np.array(R)
-    T_classic = np.array(T)
-
-    R = R_classic @ M.T
-    T = - M.T @ R_classic.T @ T_classic
-
-    # Get projection matrices to project image points to real world coordinates
-    P1 = K1 @ np.hstack((np.eye(3), np.zeros((3, 1)))) # For Camera 0 (reference)
-    P2 = K2 @ np.hstack((R, T))
-
-    P1 = P1.cpu().numpy() if hasattr(P1, 'cpu') else np.array(P1)
-    P2 = P2.cpu().numpy() if hasattr(P2, 'cpu') else np.array(P2)
-
-    # Set multi-index for alignment
-    df0 = df_joints_sorted[df_joints_sorted['view_idx'] == 0].set_index(['image', 'joint_idx'])
-    df1 = df_joints_sorted[df_joints_sorted['view_idx'] == 1].set_index(['image', 'joint_idx'])
-
-    # Align on index and extract as arrays
-    aligned0, aligned1 = df0.align(df1)
-
-    xy_0 = aligned0[['x', 'y']].to_numpy()
-    xy_1 = aligned1[['x', 'y']].to_numpy()
-
-    xy_0 = xy_0.astype(np.float64).T  # shape (2, N)
-    xy_1 = xy_1.astype(np.float64).T  # shape (2, N)
-
-    # Triangulate to homogeneous coordinates
-    points_4d = cv2.triangulatePoints(P1, P2, xy_0, xy_1)
-
-    # Convert to 3D (non-homogeneous coordinates)
-    points_3d = points_4d[:3, :] / points_4d[3, :]  # Shape (3, N)
-
-    points_classic = points_3d.T @ M
-
-    plot_3d_joints(points_classic)
-    return points_classic
 
 
 def triangulate_pts_adaptive(joint_data, metas, img_idx=0):
@@ -255,8 +253,16 @@ def triangulate_pts_adaptive(joint_data, metas, img_idx=0):
 
 def visualize_heatmaps(model, dataloader, output_dir):
     """
-    Runs inference and overlays heatmaps onto images for multiple views.
-    Saves results in structured directories: images -> views -> joints.
+    Run inference, overlay heatmaps, save images, and export joint data.
+
+    Args:
+        model (torch.nn.Module): Trained pose estimation model.
+        dataloader (torch.utils.data.DataLoader): DataLoader for test images.
+        output_dir (str): Directory to save visualizations and joint data.
+        meta (dict, optional): Additional metadata for visualization.
+
+    Returns:
+        None
     """
     model.eval()
     os.makedirs(output_dir, exist_ok=True)

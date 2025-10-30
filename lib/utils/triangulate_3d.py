@@ -1,3 +1,35 @@
+"""
+Multi-View 2D-to-3D Triangulation Utilities
+
+This module provides functions for extracting 2D joint locations from heatmaps and
+triangulating them into 3D coordinates using multi-view camera geometry. It is used
+in the VoxelPose pipeline to convert multi-view heatmap predictions into 3D pose
+estimates.
+
+Features:
+- Extracts joint centers from heatmaps for each view and joint
+- Handles confidence thresholding for joint detection
+- Triangulates 3D joint positions from multi-view 2D detections using camera intrinsics and extrinsics
+- Supports two or more views for robust triangulation
+- Converts between camera coordinate conventions (OpenCV/classical)
+
+Functions:
+- get_heatmap_center: Extracts the center point from a heatmap above a confidence threshold
+- extract_2d_joints_from_heatmaps: Extracts 2D joint locations from all heatmaps and views
+- triangulate_joints_from_2d: Triangulates 3D joint locations from multi-view 2D detections
+- triangulate_from_heatmaps: Complete pipeline to extract 2D joints and triangulate to 3D
+
+Example Usage:
+    # Extract 2D joints and triangulate to 3D
+    joints_3d = triangulate_from_heatmaps(all_heatmaps, metas, threshold=0.5)
+
+Requirements:
+- Camera intrinsics and extrinsics in metadata
+- Heatmaps from pose estimation model
+- OpenCV and numpy installed
+
+"""
+
 import numpy as np
 import pandas as pd
 import cv2

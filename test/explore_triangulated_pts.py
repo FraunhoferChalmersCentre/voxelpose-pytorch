@@ -1,4 +1,28 @@
-# %%
+"""
+Triangulated 3D Joint Exploration Script
+
+This script provides an interactive visualization tool for exploring triangulated
+3D joint coordinates from multi-view pose estimation results. It loads joint data
+from an Excel file (typically exported from VoxelPose or similar pipelines), and
+displays the 3D skeleton for each image/frame using matplotlib. Users can scroll
+through frames using a slider to inspect pose quality and joint validity.
+
+Features:
+- Loads 3D joint coordinates from an Excel file
+- Supports custom joint and skeleton definitions
+- Filters out invalid frames with missing joint data
+- Interactive 3D visualization with frame slider
+- Displays skeleton connections and joint positions for each frame
+
+Example Usage:
+    python external/voxelpose/test/explore_triangulated_pts.py \
+        --file path/to/all_joints.xlsx
+
+Requirements:
+- Input Excel file with columns: ['image', 'view_idx', 'X_3d', 'Y_3d', 'Z_3d']
+- Python packages: pandas, numpy, matplotlib
+
+"""
 
 import pandas as pd
 import numpy as np

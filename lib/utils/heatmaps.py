@@ -1,3 +1,41 @@
+"""
+Heatmap and 3D Skeleton Visualization Utilities
+
+This module provides functions for visualizing pose estimation heatmaps and 3D skeletons
+in both image and world coordinates. It supports overlaying heatmaps on images, saving
+interactive 3D scatter plots of heatmaps, and generating interactive 3D skeleton visualizations
+with frame sliders. These utilities are used in the VoxelPose pipeline for qualitative
+and quantitative analysis of multi-view pose estimation results.
+
+Features:
+- Overlay predicted heatmaps on input images and save visualizations per joint and view
+- Save interactive 3D scatter plots of heatmaps in world coordinates (HTML)
+- Visualize camera positions and viewing directions in 3D plots
+- Save interactive 3D skeleton visualizations with frame sliders (HTML)
+- Support for both model predictions and triangulated joint results
+
+Functions:
+- visualize_heatmaps: Overlay and save heatmaps on images for each joint and view
+- overlay_heatmap: Blend a heatmap with an image for visualization
+- save_interactive_3d_heatmaps_world: Save interactive 3D scatter plots for each joint's heatmap
+- save_interactive_3d_heatmap_world: Save a single interactive 3D scatter plot for a heatmap
+- save_interactive_3d_skeleton_with_slider: Save interactive 3D skeleton visualizations with frame slider
+
+Example Usage:
+    # Overlay and save heatmaps
+    visualize_heatmaps(views, all_heatmaps, output_dir, meta=meta)
+
+    # Save interactive 3D heatmap visualizations
+    save_interactive_3d_heatmaps_world(heatmap_3d, space_size, space_center, output_dir, meta=meta)
+
+    # Save interactive 3D skeleton visualization
+    save_interactive_3d_skeleton_with_slider(pred, limbs=LIMBS, output_path="skeleton_3d_slider.html", meta=meta)
+
+Requirements:
+- OpenCV, numpy, torch, matplotlib, and plotly installed
+- Metadata with camera parameters for camera visualization (optional)
+
+"""
 import os
 import cv2
 import numpy as np
