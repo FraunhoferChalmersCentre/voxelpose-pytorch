@@ -1,9 +1,32 @@
+"""
+Multi-View Pose Inference Script for VoxelPose
+
+This script runs inference using a trained VoxelPose model on a multi-view dataset.
+It loads the experiment configuration, model weights, and test data, then predicts
+3D poses and saves interactive visualizations.
+
+Features:
+- Loads experiment configuration and trained model checkpoint
+- Runs inference on a multi-view test dataset using multiple GPUs
+- Predicts 3D joint positions and heatmaps for each batch
+- Triangulates joints from multi-view heatmaps to obtain 3D coordinates
+- Saves interactive 3D skeleton visualizations for both model predictions and triangulated results
+
+Example Usage:
+    python external/voxelpose/run/inference_3d.py \
+        --cfg configs/panoptic/resnet50/inference_prn64_cpn80x80x20_960x512_cam5.yaml \
+        --output-dir output/inference_results
+
+Requirements:
+- Trained VoxelPose model and configuration file
+- Test dataset prepared in the expected format
+- CUDA-enabled GPUs for inference
+
+"""
 import torch
 import torchvision.transforms as transforms
 import argparse
 import os
-import json
-import numpy as np
 
 from lib.core.config import config, update_config
 from lib.utils.utils import create_logger
@@ -12,11 +35,15 @@ from lib.models.multi_person_posenet import get_multi_person_pose_net
 import lib.dataset as dataset
 import lib.models as models
 from lib.utils.heatmaps import save_interactive_3d_skeleton_with_slider
+from lib.utils.triangulate_3d import triangulate_from_heatmaps
 
 
 def parse_args():
     """
     Parse command-line arguments for inference.
+
+    Returns:
+        argparse.Namespace: Parsed arguments including configuration file path and output directory.
     """
     parser = argparse.ArgumentParser(description="Run inference on a dataset")
     parser.add_argument('--cfg', help='Experiment configuration file', required=True, type=str)
@@ -29,28 +56,75 @@ def parse_args():
 
 def run_inference(config, model, dataloader, output_dir):
     """
-    Runs inference on the dataset and saves predictions.
+    Runs inference on the dataset and saves predictions and visualizations.
+
+    Args:
+        config: Experiment configuration object.
+        model: Trained VoxelPose model.
+        dataloader: DataLoader for the test dataset.
+        output_dir (str): Directory to save results.
+
+    Workflow:
+        - Sets model to evaluation mode
+        - Iterates over batches, runs model to get predictions and heatmaps
+        - Triangulates joints from multi-view heatmaps
+        - Saves interactive 3D skeleton visualizations for both model predictions and triangulated joints
+        - Prints completion message
     """
     model.eval()  # Set the model to evaluation mode
     os.makedirs(output_dir, exist_ok=True)  # Create output directory if it does not exist
 
     preds = []
     metas = []
-    with torch.no_grad():  # Disable gradient computation for inference
-        for i, (inputs, meta) in enumerate(dataloader):
-            pred, heatmaps, grid_centers, _, _, _ = model(views=inputs, meta=meta)
+    all_heatmaps = []
+    with torch.no_grad():
+
+            
+        for i, (views, meta) in enumerate(dataloader):
+            pred, heatmaps, grid_centers, _, _, _ = model(views=views, meta=meta)
             pred = pred.detach().cpu()
+
+            heatmaps_np = [hm.detach().cpu().numpy() for hm in heatmaps]
+            all_heatmaps.append(heatmaps_np)
+
             metas.append(meta)
             preds.append(pred)
+            
+    
+    # Triangulate joints from heatmaps
+    triangulated = triangulate_from_heatmaps(all_heatmaps, metas)
     preds = torch.cat(preds, dim=0)
-    save_interactive_3d_skeleton_with_slider(preds, output_path="/home/anders.sjoberg/projects/pose-estimation/external/voxelpose/output/hm_html/my_skeletons.html", meta=meta)
+    #triangulated_joints = np.concatenate(triangulated, axis=0)
 
+    # Save both model predictions and triangulated results
+    # For model predictions (shape: B, N, J, 5)
+    save_interactive_3d_skeleton_with_slider(
+        preds, 
+        output_path=os.path.join(output_dir, "model_predictions.html"),
+        meta=meta, 
+        is_triangulated=False
+    )
+
+    # For triangulated points (shape: B, J, 3)
+    save_interactive_3d_skeleton_with_slider(
+        triangulated, 
+        output_path=os.path.join(output_dir, "triangulated_joints.html"),
+        meta=meta,
+        is_triangulated=True
+    )
     print(f"✅ Inference completed. Results saved to {output_dir}")
 
 
 def main():
     """
-    Main function for running inference.
+    Main entry point for running multi-view pose inference.
+
+    Workflow:
+        - Parses command-line arguments
+        - Sets up logger and GPU configuration
+        - Loads test dataset and model
+        - Loads model weights from checkpoint
+        - Runs inference and saves results
     """
     args = parse_args()
 

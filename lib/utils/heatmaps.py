@@ -1,6 +1,45 @@
+"""
+Heatmap and 3D Skeleton Visualization Utilities
+
+This module provides functions for visualizing pose estimation heatmaps and 3D skeletons
+in both image and world coordinates. It supports overlaying heatmaps on images, saving
+interactive 3D scatter plots of heatmaps, and generating interactive 3D skeleton visualizations
+with frame sliders. These utilities are used in the VoxelPose pipeline for qualitative
+and quantitative analysis of multi-view pose estimation results.
+
+Features:
+- Overlay predicted heatmaps on input images and save visualizations per joint and view
+- Save interactive 3D scatter plots of heatmaps in world coordinates (HTML)
+- Visualize camera positions and viewing directions in 3D plots
+- Save interactive 3D skeleton visualizations with frame sliders (HTML)
+- Support for both model predictions and triangulated joint results
+
+Functions:
+- visualize_heatmaps: Overlay and save heatmaps on images for each joint and view
+- overlay_heatmap: Blend a heatmap with an image for visualization
+- save_interactive_3d_heatmaps_world: Save interactive 3D scatter plots for each joint's heatmap
+- save_interactive_3d_heatmap_world: Save a single interactive 3D scatter plot for a heatmap
+- save_interactive_3d_skeleton_with_slider: Save interactive 3D skeleton visualizations with frame slider
+
+Example Usage:
+    # Overlay and save heatmaps
+    visualize_heatmaps(views, all_heatmaps, output_dir, meta=meta)
+
+    # Save interactive 3D heatmap visualizations
+    save_interactive_3d_heatmaps_world(heatmap_3d, space_size, space_center, output_dir, meta=meta)
+
+    # Save interactive 3D skeleton visualization
+    save_interactive_3d_skeleton_with_slider(pred, limbs=LIMBS, output_path="skeleton_3d_slider.html", meta=meta)
+
+Requirements:
+- OpenCV, numpy, torch, matplotlib, and plotly installed
+- Metadata with camera parameters for camera visualization (optional)
+
+"""
 import os
 import cv2
 import numpy as np
+import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
@@ -439,15 +478,18 @@ LIMBS = [[0, 1],
          [12, 13],
          [13, 14]]
 
-def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skeleton_3d_slider.html", meta=None):
+def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skeleton_3d_slider.html", meta=None, is_triangulated=False):
     """
     Save an interactive 3D skeleton visualization with slider for frames.
 
     Args:
-        pred (torch.Tensor): Shape (B, N, J, 5), J=15, last dim: (x, y, z, present_flag, confidence).
+        pred (torch.Tensor or np.ndarray): 
+            - If is_triangulated=False: Shape (B, N, J, 5), J=15, last dim: (x, y, z, present_flag, confidence)
+            - If is_triangulated=True: Shape (B, J, 3), just (x, y, z) coordinates
         limbs (list of tuple): List of joint index pairs.
         output_path (str): Output path to HTML file.
         meta (list, optional): List of metadata dicts for visualizing camera positions.
+        is_triangulated (bool): If True, treats input as triangulated points with shape (B, J, 3)
     """
     if isinstance(pred, torch.Tensor):
         pred = pred.detach().cpu().numpy()
@@ -456,7 +498,31 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
         limbs = LIMBS
 
     fig = go.Figure()
-    B, N, J, _ = pred.shape
+    
+    # Handle different input formats
+    if is_triangulated:
+        # Input shape: (B, J, 3)
+        B, J, _ = pred.shape
+        N = 1  # Only one "person" per frame for triangulated data
+        
+        # Convert to the expected format: (B, N, J, 5)
+        # Add present_flag (1.0 for valid joints, 0.0 for NaN) and confidence (1.0)
+        converted_pred = np.zeros((B, 1, J, 5))
+        for b in range(B):
+            skeleton = pred[b]  # (J, 3)
+            # Check for valid joints (not NaN)
+            valid_mask = ~np.isnan(skeleton).any(axis=1)  # (J,)
+            
+            converted_pred[b, 0, :, :3] = skeleton  # x, y, z
+            converted_pred[b, 0, :, 3] = valid_mask.astype(float)  # present_flag
+            converted_pred[b, 0, :, 4] = valid_mask.astype(float)  # confidence
+        
+        pred = converted_pred
+        B, N, J, _ = pred.shape
+    else:
+        # Input shape: (B, N, J, 5) - standard format
+        B, N, J, _ = pred.shape
+
     frame_list = []
 
     # Create traces for each frame
@@ -464,20 +530,31 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
         frame_traces = []
         for n in range(N):
             skeleton = pred[b, n]  # (J, 5)
-            present = skeleton[:, 3] >= 0
+            present = skeleton[:, 3] >= 0  # Use threshold for present flag
             if not present.any():
                 continue
 
             x, y, z = skeleton[:, 0], skeleton[:, 1], skeleton[:, 2]
+            
+            # Skip if all coordinates are NaN
+            valid_coords = ~(np.isnan(x) | np.isnan(y) | np.isnan(z))
+            present = present & valid_coords
+            
+            if not present.any():
+                continue
+
+            # Choose color based on data type
+            color = 'red' if is_triangulated else 'blue'
+            person_name = 'Triangulated' if is_triangulated else f'Person {n}'
 
             # Joints
             joint_trace = go.Scatter3d(
                 x=x[present], y=y[present], z=z[present],
                 mode='markers+text',
-                text=[str(i) for i in range(J)],
-                marker=dict(size=4, color='blue'),
-                name=f'Person {n}',
-                showlegend=False,
+                text=[str(i) for i in np.where(present)[0]],
+                marker=dict(size=4, color=color),
+                name=person_name,
+                showlegend=(n == 0),  # Only show legend for first person
                 visible=(b == 0)
             )
             fig.add_trace(joint_trace)
@@ -485,11 +562,11 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
 
             # Limbs
             for i, j in limbs:
-                if present[i] and present[j]:
+                if i < len(present) and j < len(present) and present[i] and present[j]:
                     limb_trace = go.Scatter3d(
                         x=[x[i], x[j]], y=[y[i], y[j]], z=[z[i], z[j]],
                         mode='lines',
-                        line=dict(width=3, color='blue'),
+                        line=dict(width=3, color=color),
                         showlegend=False,
                         visible=(b == 0)
                     )
@@ -499,6 +576,7 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
         frame_list.append(frame_traces)
 
     # Add camera positions and directions if available
+    camera_traces_count = 0
     if meta:
         for i, m in enumerate(meta):
             T = m["camera"]["T"][0].cpu().numpy().flatten()
@@ -509,9 +587,9 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
             cam_trace = go.Scatter3d(
                 x=[cam_pos[0]], y=[cam_pos[1]], z=[cam_pos[2]],
                 mode='markers',
-                marker=dict(size=6, color='red', symbol='circle'),
+                marker=dict(size=6, color='orange', symbol='circle'),
                 name=f"Camera {i}",
-                showlegend=False,
+                showlegend=(i == 0),
                 visible=True
             )
             dir_trace = go.Scatter3d(
@@ -519,12 +597,13 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
                 y=[cam_pos[1], direction[1]],
                 z=[cam_pos[2], direction[2]],
                 mode='lines',
-                line=dict(color='red', width=3),
+                line=dict(color='orange', width=3),
                 showlegend=False,
                 visible=True
             )
             fig.add_trace(cam_trace)
             fig.add_trace(dir_trace)
+            camera_traces_count += 2
 
     # Build slider steps
     steps = []
@@ -536,8 +615,8 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
             offset += len(frame_list[b])
         for j in range(len(frame_list[i])):
             visibility[offset + j] = True
-        # Add camera traces at the end
-        visibility += [True] * (len(fig.data) - total_skeleton_traces)
+        # Add camera traces at the end (always visible)
+        visibility += [True] * camera_traces_count
 
         step = dict(
             method="update",
@@ -553,8 +632,9 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
         steps=steps
     )]
 
+    data_type = "Triangulated Skeletons" if is_triangulated else "Model Predictions"
     fig.update_layout(
-        title="3D Skeletons Over Time",
+        title=f"3D {data_type} Over Time",
         sliders=sliders,
         scene=dict(
             xaxis_title='X (mm)',
@@ -566,5 +646,4 @@ def save_interactive_3d_skeleton_with_slider(pred, limbs=None, output_path="skel
     )
 
     fig.write_html(output_path)
-    print(f"\u2705 Skeleton slider visualization saved as {output_path}")
-
+    print(f"✅ {data_type} slider visualization saved as {output_path}")

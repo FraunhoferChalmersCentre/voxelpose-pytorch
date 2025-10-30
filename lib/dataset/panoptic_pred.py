@@ -1,12 +1,10 @@
-import os
 import glob
 import os.path as osp
 import cv2
-import numpy as np
 import json_tricks as json
-import pickle
 from lib.dataset.JointsDataset import JointsDataset
 from lib.utils.transforms import get_affine_transform, get_scale
+from lib.utils.definitions import *
 
 
 class PanopticInference(JointsDataset):
@@ -71,10 +69,6 @@ class PanopticInference(JointsDataset):
         cam_file = osp.join(self.dataset_root, seq, f'calibration_{seq}.json')
         with open(cam_file) as cfile:
             calib = json.load(cfile)
-
-        M = np.array([[1.0, 0.0, 0.0],
-                      [0.0, 0.0, -1.0],
-                      [0.0, 1.0, 0.0]])
 
         cameras = {}
         for cam in calib['cameras']:
